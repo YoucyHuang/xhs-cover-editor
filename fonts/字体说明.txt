@@ -1,0 +1,49 @@
+这个文件夹放字体文件。完整说明见上一层的 README.md 第五节。
+
+文件名必须和下面完全一致（后缀 .ttf / .otf / .woff2 都可以），放好后刷新网页（F5）。
+
+思源宋体（Noto Serif SC）       SIL OFL 1.1 免费商用
+  NotoSerifSC-Regular.ttf      400
+  NotoSerifSC-Bold.ttf         700
+  NotoSerifSC-Black.ttf        900（Heavy，主标题默认用这个）
+  下载：https://fonts.google.com/noto/specimen/Noto+Serif+SC
+        https://github.com/adobe-fonts/source-han-serif/releases
+
+思源黑体（Noto Sans SC）        SIL OFL 1.1 免费商用
+  NotoSansSC-Light.ttf         300
+  NotoSansSC-Regular.ttf       400（副标题默认用这个）
+  NotoSansSC-Medium.ttf        500
+  NotoSansSC-Bold.ttf          700
+  NotoSansSC-Black.ttf         900
+  下载：https://fonts.google.com/noto/specimen/Noto+Sans+SC
+        https://github.com/adobe-fonts/source-han-sans/releases
+
+得意黑（Smiley Sans）           SIL OFL 1.1 免费商用
+  SmileySans-Oblique.woff2     （或 .ttf / .otf）
+  下载：https://github.com/atelier-anchor/smiley-sans/releases
+
+霞鹜文楷（LXGW WenKai）         SIL OFL 1.1 免费商用
+  LXGWWenKai-Regular.ttf
+  下载：https://github.com/lxgw/LxgwWenKai/releases
+
+站酷快乐体（ZCOOL KuaiLe）      SIL OFL 1.1 免费商用
+  ZCOOLKuaiLe-Regular.ttf
+  下载：https://fonts.google.com/specimen/ZCOOL+KuaiLe
+
+阿里巴巴普惠体 3.0              阿里巴巴官方授权 免费商用（不可单独售卖字体文件）
+  AlibabaPuHuiTi-Regular.ttf   400
+  AlibabaPuHuiTi-Medium.ttf    500
+  AlibabaPuHuiTi-Bold.ttf      700
+  AlibabaPuHuiTi-ExtraBold.ttf 800
+  下载：https://www.alibabafonts.com/
+
+英文字体（SIL OFL 1.1 免费商用，可变字重：一个文件包含全部字重）
+  BodoniModa.ttf / BodoniModa-Italic.ttf                  Bodoni Moda
+  CormorantGaramond.ttf / CormorantGaramond-Italic.ttf    Cormorant Garamond
+  PlayfairDisplay.ttf / PlayfairDisplay-Italic.ttf        Playfair Display
+  Inter.ttf                                               Inter
+  DMMono-Regular.ttf / DMMono-Medium.ttf                  DM Mono
+  Caveat.ttf                                              Caveat
+  下载：https://github.com/google/fonts （ofl 文件夹里按字体名找），或 https://fonts.google.com
+
+licenses 文件夹里是 SIL OFL 1.1 授权原文。

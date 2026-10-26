@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>小红书封面生成器</title>
+  <link rel="stylesheet" href="css/fonts.css">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">封面生成器<small>小红书 3:4</small></div>
+
+    <div class="tpl-switch" id="tplSwitch">
+      <button data-tpl="vlog" data-tip="切换到 VLOG 模板（只换颜色和标签，文字照片保留）"><span class="dot"></span>VLOG</button>
+      <button data-tpl="knowledge" data-tip="切换到 知识口播 模板（只换颜色和标签，文字照片保留）"><span class="dot"></span>知识口播</button>
+      <button data-tpl="collab" data-tip="切换到 合作 模板（只换颜色和标签，文字照片保留）"><span class="dot"></span>合作</button>
+      <button data-tpl="life" data-tip="切换到 生活 模板（只换颜色和标签，文字照片保留）"><span class="dot"></span>生活</button>
+    </div>
+
+    <div class="actions">
+      <button id="btnNew" data-tip="新建一张空白封面">新建</button>
+      <button id="btnUndo" class="icon" data-tip="撤销（Ctrl+Z）">↶</button>
+      <button id="btnRedo" class="icon" data-tip="重做（Ctrl+Shift+Z）">↷</button>
+      <span class="sep"></span>
+      <button id="btnPhoto" data-tip="上传照片（也可以直接拖进画布）">上传照片</button>
+      <button id="btnSign" data-tip="上传签名 / 手写涂鸦（透明 PNG）">上传签名</button>
+      <button id="btnFont" data-tip="上传自己下载的字体文件（.ttf / .otf）">上传字体</button>
+      <span class="sep"></span>
+      <button id="btnSafe" class="toggle" data-tip="显示 / 隐藏安全区提示框">安全区</button>
+      <button id="btnPreview" data-tip="把导出过的封面排成小红书主页双列瀑布流">主页预览</button>
+      <span class="sep"></span>
+      <button id="btnOpen" data-tip="打开以前保存的项目文件（.json）">打开项目</button>
+      <button id="btnSave" data-tip="保存为项目文件（.json），以后可以接着改（Ctrl+S）">保存项目</button>
+      <button id="btnExport" class="primary" data-tip="导出 1242×1656 的 PNG 图片（Ctrl+E）">导出 PNG</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="left">
+      <section class="side-sec">
+        <h3>版式 <span class="h-note">文字照片保留</span></h3>
+        <div id="layoutPick" class="layout-pick"></div>
+      </section>
+      <section class="side-sec">
+        <h3>模板颜色 <span class="h-note">改完自动记住</span></h3>
+        <div id="tplColors"></div>
+      </section>
+      <section class="side-sec grow">
+        <h3>图层 <span class="h-note">点击选中</span></h3>
+        <ul id="layers"></ul>
+      </section>
+    </aside>
+
+    <section class="center" id="stageWrap">
+      <div class="stage" id="stage">
+        <canvas id="cv" width="1242" height="1656"></canvas>
+        <div id="overlay"></div>
+      </div>
+      <div class="stage-info"><span id="zoomInfo"></span><span id="saveInfo"></span></div>
+    </section>
+
+    <aside class="right" id="panel"></aside>
+  </main>
+
+  <div id="dropHint" class="drop-hint" hidden>
+    <div class="drop-card">
+      <div class="drop-big">松开鼠标即可</div>
+      <div>照片 → 放进画布　·　字体文件 → 加入字体库　·　.json → 打开项目</div>
+    </div>
+  </div>
+
+  <!-- 主页预览 -->
+  <div id="previewModal" class="modal" hidden>
+    <div class="pv-wrap">
+      <div class="pv-tools">
+        <h3>主页预览</h3>
+        <p class="note">按小红书主页双列瀑布流的样子排列，看看整体风格统一不统一。<br>每次「导出 PNG」都会自动加到这里。</p>
+        <label class="check" title="把还没导出的当前画布也放进来对比"><input type="checkbox" id="pvIncludeCurrent" checked> 包含当前画布</label>
+        <button id="pvAdd" class="ghost" data-tip="加入已经发过的封面截图，一起对比">添加已有封面图</button>
+        <button id="pvClear" class="ghost danger" data-tip="清空预览里的封面（不影响已导出的文件）">清空预览</button>
+        <p class="note">昵称可以在手机框里直接点击修改。</p>
+        <button id="pvClose" class="primary" data-tip="关闭预览（Esc）">关闭预览</button>
+      </div>
+      <div class="phone">
+        <div class="phone-scroll">
+          <div class="pv-profile">
+            <div class="pv-avatar" id="pvAvatar">我</div>
+            <div>
+              <div class="pv-name" id="pvName" contenteditable="true" spellcheck="false" title="点击修改昵称">我的小红书</div>
+              <div class="pv-id">小红书号：12345678 · <span id="pvCount"></span></div>
+            </div>
+          </div>
+          <div class="pv-stats"><span><b>128</b> 关注</span><span><b>2.3万</b> 粉丝</span><span><b>18.6万</b> 获赞与收藏</span></div>
+          <div class="pv-tabs"><span class="on">笔记</span><span>收藏</span><span>赞过</span></div>
+          <div class="pv-grid"><div class="pv-col" id="pvCol0"></div><div class="pv-col" id="pvCol1"></div></div>
+          <div class="pv-empty" id="pvEmpty" hidden>还没有导出过封面</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <input type="file" id="filePhoto" accept="image/*" hidden>
+  <input type="file" id="fileSign" accept="image/png,image/*" hidden>
+  <input type="file" id="fileFont" accept=".ttf,.otf,.woff,.woff2" multiple hidden>
+  <input type="file" id="fileProject" accept=".json,application/json" hidden>
+  <input type="file" id="filePreviewAdd" accept="image/*" multiple hidden>
+
+  <script src="js/db.js"></script>
+  <script src="js/fonts.js"></script>
+  <script src="js/render.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
