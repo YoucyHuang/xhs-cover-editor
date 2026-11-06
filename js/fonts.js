@@ -77,6 +77,8 @@ const Fonts = {
   },
 
   async checkBuiltins() {
+    // 在线版：字体文件都在服务器上，不在启动时一次性下载全部字体（手机流量），用到哪个再加载哪个
+    if (window.COVER_ONLINE) { FONT_DEFS.forEach(d => { this.status[d.family] = 'ok'; }); this._emit(); return; }
     await Promise.all(FONT_DEFS.map(async d => {
       this.status[d.family] = 'checking';
       const face = this.faceFor(d.family, 400);

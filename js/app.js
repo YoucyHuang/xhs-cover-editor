@@ -15,6 +15,7 @@
     { id: 'chips', name: '小标签组', icon: '▭' },
     { id: 'tag', name: '系列标签', icon: '◩' },
     { id: 'rule', name: '细线', icon: '—' },
+    { id: 'deco', name: '金闪 / 泡泡', icon: '✦' },
     { id: 'block', name: '标题色块', icon: '▬' },
     { id: 'photo', name: '照片', icon: '▣' },
   ];
@@ -60,6 +61,7 @@
       chips: { text: 'VLOG / 城市 / 3 DAYS' },
       place: { text: 'Somewhere, Oct.' },
       sign: { assetId: null },
+      deco: defaultDeco(),
     };
     applyLayout(st, layoutDefaults('classic'));
     return st;
@@ -77,6 +79,9 @@
     if (!TEMPLATES[out.template]) out.template = 'vlog';
     if (!LAYOUTS[out.layout]) out.layout = 'classic';
     out.layoutStore = st.layoutStore || {};
+    const dd = defaultDeco(), sd = st.deco || {};
+    out.deco = { ...dd, ...sd, sparkle: { ...dd.sparkle, ...(sd.sparkle || {}) }, bubble: { ...dd.bubble, ...(sd.bubble || {}) }, glitter: { ...dd.glitter, ...(sd.glitter || {}) } };
+    if (!out.block.shape || !Array.isArray(out.block.shape.top)) out.block.shape = flatShape();
     return out;
   }
 
@@ -84,6 +89,8 @@
   const assets = {};          // id -> { dataURL, img }
   let selected = null;        // 当前选中的图层 id
   let editing = null;         // 正在画布上双击编辑的文字 id
+  let shapeMode = false;      // 标题色块：画布上拖点改形状
+  let shapeSym = false;       // 改形状时左右对称
   let ui = { showSafe: false };
   try { ui = Object.assign(ui, JSON.parse(localStorage.getItem(LS_UI) || '{}')); } catch (e) {}
   const saveUI = () => { try { localStorage.setItem(LS_UI, JSON.stringify(ui)); } catch (e) {} };
@@ -108,6 +115,22 @@
     }
     for (const c of kids.flat()) if (c != null && c !== false) e.append(c.nodeType ? c : String(c));
     return e;
+  }
+
+  /** 页面内的确认框（在线版里浏览器自带的 confirm / alert 不会弹出） */
+  function ask(msg, okLabel = '确定', onlyOk = false) {
+    return new Promise(resolve => {
+      const close = v => { m.remove(); document.removeEventListener('keydown', onKey, true); resolve(v); };
+      const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); close(false); } else if (e.key === 'Enter') { e.preventDefault(); close(true); } };
+      const ok = h('button', { class: 'primary', onclick: () => close(true) }, okLabel);
+      const m = h('div', { class: 'ask-mask', onclick: e => { if (e.target === m) close(false); } },
+        h('div', { class: 'ask-box', role: 'dialog' },
+          h('div', { class: 'ask-msg' }, msg),
+          h('div', { class: 'ask-btns' }, !onlyOk && h('button', { class: 'ghost', onclick: () => close(false) }, '取消'), ok)));
+      document.body.append(m);
+      document.addEventListener('keydown', onKey, true);
+      ok.focus();
+    });
   }
 
   function toast(msg, ms = 2400) {
@@ -174,6 +197,7 @@
 
   async function restore(snap) {
     state = normalize(JSON.parse(snap));
+    ampBase = null;
     lastSnap = snap;
     rememberColors(state.templateColors);
     await loadAssetsFor(state);
@@ -247,8 +271,8 @@
   // ---------------------------------------------------------------- 画布尺寸适配
   function fit() {
     const r = stageWrap.getBoundingClientRect();
-    const pad = 48;
-    scale = Math.max(0.1, Math.min((r.width - pad) / W, (r.height - pad - 28) / H));
+    const pad = isMobile() ? 14 : 48;
+    scale = Math.max(0.1, Math.min((r.width - pad) / W, (r.height - pad - (isMobile() ? 20 : 28)) / H));
     stage.style.width = W * scale + 'px';
     stage.style.height = H * scale + 'px';
     $('#zoomInfo').textContent = `1242 × 1656 px · 显示 ${Math.round(scale * 100)}%`;
@@ -282,7 +306,7 @@
       }));
     }
 
-    if (!selected || editing === selected) return;
+    if (!selected || editing === selected || selected === 'deco') return;
     const el = state[selected];
     if (!el.visible) return;
     if (selected === 'sign' && !el.assetId) return;
@@ -291,6 +315,14 @@
       class: 'sel-box' + (selected === 'photo' ? ' photo' : '') + (el.locked ? ' locked' : ''),
       style: { left: b.x * s + 'px', top: b.y * s + 'px', width: b.w * s + 'px', height: b.h * s + 'px' },
     });
+    if (selected === 'block' && !el.locked) {
+      box.append(h('button', { class: 'shape-toggle' + (shapeMode ? ' on' : ''), 'data-act': 'shape' }, shapeMode ? '✓ 完成形状' : '〰 拖点改形状'));
+    }
+    if (selected === 'block' && shapeMode && !el.locked) {
+      box.classList.add('shaping');
+      overlay.append(shapeOverlay(), box);
+      return;
+    }
     if (!el.locked) {
       let dirs = [];
       if (selected === 'block') dirs = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
@@ -302,6 +334,32 @@
       box.append(h('div', { class: 'sel-hint' }, state.photo.assetId ? '拖动调整位置 · 滚轮缩放 · 双击重置' : '还没有照片'));
     }
     overlay.append(box);
+  }
+
+  /** 改形状模式：色块轮廓 + 上下两排可拖的圆点 */
+  function shapeOverlay() {
+    const b = state.block, sh = blockShape(b), s = scale, n = SHAPE_N - 1;
+    const wrap = h('div', { class: 'shape-layer' });
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    svg.setAttribute('class', 'shape-svg');
+    const pts = [];
+    for (let i = 0; i <= 60; i++) pts.push([b.x + b.w * i / 60, blockTopY(b, i / 60)]);
+    for (let i = 60; i >= 0; i--) pts.push([b.x + b.w * i / 60, blockBotY(b, i / 60)]);
+    svg.innerHTML = `<polygon points="${pts.map(q => q.map(v => v.toFixed(1)).join(',')).join(' ')}" class="shape-outline"/>`;
+    wrap.append(svg);
+    for (const edge of ['top', 'bot']) {
+      for (let i = 0; i <= n; i++) {
+        const x = b.x + b.w * i / n;
+        const y = edge === 'top' ? b.y + sh.top[i] : b.y + b.h + sh.bot[i];
+        wrap.append(h('div', {
+          class: 'shape-pt' + (edge === 'bot' ? ' bot' : ''), 'data-shape': edge + ':' + i,
+          title: edge === 'top' ? '上下拖动改变上边形状（拖回原位会吸附成平的）' : '上下拖动改变下边形状',
+          style: { left: x * s + 'px', top: y * s + 'px' },
+        }));
+      }
+    }
+    return wrap;
   }
 
   function safeZoneSVG() {
@@ -333,6 +391,12 @@
       const el = state[id];
       if (!el.visible || el.locked) continue;
       if (id === 'sign' && !el.assetId) continue;
+      if (id === 'block' && !isFlat(el)) {
+        blockPath(measureCtx, el);
+        measureCtx.lineWidth = 12 / scale;
+        if (measureCtx.isPointInPath(p.x, p.y) || measureCtx.isPointInStroke(p.x, p.y)) return id;
+        continue;
+      }
       const b = bounds(id);
       const pad = id === 'photo' ? 0 : (id === 'rule' ? 10 : 6) / scale;
       if (p.x >= b.x - pad && p.x <= b.x + b.w + pad && p.y >= b.y - pad && p.y <= b.y + b.h + pad) return id;
@@ -343,6 +407,8 @@
   function select(id) {
     if (editing && editing !== id) stopEdit();
     if (selected === id) return;
+    if (id !== 'block') shapeMode = false;
+    if (id && isMobile()) setMobileTab('panel');
     selected = id;
     buildPanel();
     scheduleRender();
@@ -389,9 +455,15 @@
     if (e.button !== 0) return;
     if (e.target.closest('.inline-editor')) return;
     if (editing) stopEdit();
+    const act = e.target.closest('[data-act]');
+    if (act) { e.preventDefault(); e.stopPropagation(); if (act.dataset.act === 'shape') setShapeMode(!shapeMode); return; }
     const p = toCanvas(e);
     const handle = e.target.dataset && e.target.dataset.handle;
-    if (handle && selected) {
+    const shapePt = e.target.dataset && e.target.dataset.shape;
+    if (shapePt && selected === 'block') {
+      const [edge, i] = shapePt.split(':');
+      drag = { type: 'shape', id: 'block', edge, i: +i, start: p, orig: JSON.parse(JSON.stringify(blockShape(state.block))), moved: false };
+    } else if (handle && selected) {
       const el = state[selected];
       drag = { type: 'resize', id: selected, dir: handle, start: p, orig: { ...el }, ob: bounds(selected), moved: false };
     } else {
@@ -435,10 +507,39 @@
       el.x = r.x; el.y = r.y;
     } else if (drag.type === 'resize') {
       doResize(drag, dx, dy, e.shiftKey);
+    } else if (drag.type === 'shape') {
+      doShape(drag, dy, e.altKey);
     }
     if (drag.id === 'block') clampPhoto();   // 色场编号版式里，照片区域跟着色块上边走
     changed();
   });
+
+  function doShape(d, dy, noSnap) {
+    const b = state.block;
+    const sh = b.shape = JSON.parse(JSON.stringify(d.orig));
+    const arr = sh[d.edge];
+    let v = d.orig[d.edge][d.i] + dy;
+    if (!noSnap && Math.abs(v) < 10 / scale) v = 0;              // 拖回原位吸附成平的
+    v = Math.round(v);
+    if (d.edge === 'top') v = Math.max(-b.y, Math.min(b.h + sh.bot[d.i] - 40, v));
+    else v = Math.max(sh.top[d.i] - b.h + 40, Math.min(H - b.y - b.h + 200, v));
+    arr[d.i] = v;
+    if (shapeSym) arr[SHAPE_N - 1 - d.i] = v;                    // 左右对称
+    ampBase = null;
+  }
+  function setShapeMode(on) {
+    shapeMode = !!on;
+    if (shapeMode && state.block.locked) { shapeMode = false; toast('色块已锁定，先在图层列表解锁'); }
+    if (shapeMode) toast('拖动色块边上的圆点改变形状 · 按住 Alt 不吸附 · Esc 完成', 3200);
+    buildPanel();
+    scheduleRender();
+  }
+  function applyShapePreset(pr) {
+    const b = state.block;
+    b.shape = { top: pr.top.slice(), bot: blockShape(b).bot.slice() };
+    ampBase = null;
+    clampPhoto(); changed(); commit();
+  }
 
   function doResize(d, dx, dy) {
     const el = state[d.id], o = d.orig, dir = d.dir;
@@ -481,6 +582,7 @@
     const p = toCanvas(e);
     const hit = hitTest(p);
     if (TEXT_IDS.includes(hit)) startEdit(hit);
+    else if (hit === 'block' && !state.block.locked) { select('block'); setShapeMode(!shapeMode); }
     else if (hit === 'photo' || (selected === 'photo' && hit === null)) resetPhoto();
   });
 
@@ -543,6 +645,8 @@
       fontFamily: `"${el.font}", "Noto Sans SC", sans-serif`, fontStyle: el.italic ? 'italic' : 'normal',
       fontWeight: el.weight, fontSize: el.size * s + 'px', lineHeight: el.lineHeight,
       letterSpacing: (el.letterSpacing || 0) * s + 'px', color: el.color, textAlign: AUTO_TEXT.includes(id) ? 'left' : el.align,
+      webkitTextStroke: el.strokeW > 0 ? `${el.strokeW * 2 * s}px ${el.strokeColor}` : '', paintOrder: 'stroke fill',
+      textShadow: el.shadow ? `${el.shadowX * s}px ${el.shadowY * s}px ${el.shadowBlur * s}px ${hexA(el.shadowColor, el.shadowOpacity / 100)}` : '',
     });
     editorEl.style.height = 'auto';
     editorEl.style.height = Math.max(editorEl.scrollHeight, el.size * el.lineHeight * s) + 'px';
@@ -649,7 +753,7 @@
   // ---------------------------------------------------------------- 图层列表
   let layersSig = '';
   function renderLayers() {
-    const sig = JSON.stringify([selected, state.block.opacity, LAYERS.map(l => [state[l.id].visible, state[l.id].locked, state[l.id].assetId, TEXT_IDS.includes(l.id) ? textOf(state, l.id) : ''])]);
+    const sig = JSON.stringify([selected, state.block.opacity, state.deco.sparkle.count, state.deco.bubble.count, state.deco.glitter.count, LAYERS.map(l => [state[l.id].visible, state[l.id].locked, state[l.id].assetId, TEXT_IDS.includes(l.id) ? textOf(state, l.id) : ''])]);
     if (sig === layersSig) return;
     layersSig = sig;
     const ul = $('#layers');
@@ -662,6 +766,7 @@
       else if (l.id === 'sign') sub = el.assetId ? '已放入' : '未上传';
       else if (l.id === 'block') sub = `透明度 ${el.opacity}%`;
       else if (l.id === 'rule') sub = `长 ${el.w}px`;
+      else if (l.id === 'deco') { const d = state.deco; sub = [d.sparkle.count && `金闪 ${d.sparkle.count}`, d.bubble.count && `泡泡 ${d.bubble.count}`, d.glitter.count && `光点 ${d.glitter.count}`].filter(Boolean).join(' · ') || '未添加'; }
       const li = h('li', { class: 'layer' + (selected === l.id ? ' active' : '') + (el.visible ? '' : ' hidden-layer'), title: `选中「${l.name}」` },
         h('span', { class: 'l-icon' }, l.icon),
         h('span', { class: 'l-text' }, h('span', { class: 'l-name' }, l.name), h('span', { class: 'l-sub' }, sub)),
@@ -772,7 +877,7 @@
           item.append(h('button', {
             class: 'mini', 'data-tip': '从字体库删除', onclick: async ev => {
               ev.stopPropagation();
-              if (!confirm(`从字体库删除「${f.name}」？`)) return;
+              if (!(await ask(`从字体库删除「${f.name}」？`, '删除'))) return;
               await Fonts.removeCustom(f.id);
               fill();
             },
@@ -827,7 +932,7 @@
       place: '地点、日期或一句英文。默认用 Cormorant 斜体、右对齐。',
     };
     if (NOTES[id]) rows.unshift(h('p', { class: 'note' }, NOTES[id]));
-    const out = [group(LAYER_NAME[id], ...rows)];
+    const out = [group(LAYER_NAME[id], ...rows), textFxGroup(t)];
 
     const pos = [numCtl({ label: 'X', get: () => t.x, set: v => { t.x = v; }, tip: '左边距离（px）' }), numCtl({ label: 'Y', get: () => t.y, set: v => { t.y = v; }, tip: '上边距离（px）' })];
     if (BOX_TEXT.includes(id)) pos.push(numCtl({ label: '宽', get: () => t.w, set: v => { t.w = Math.max(60, v); }, tip: '文字框宽度，超出会自动换行' }));
@@ -852,6 +957,33 @@
     out.push(warn);
     return out;
   }
+  /** 文字描边 + 投影 */
+  function textFxGroup(t) {
+    const tpl = () => tplColor(state);
+    const fx = (o) => () => { Object.assign(t, o); changed(); commit(); buildPanel(); };
+    const shadowRows = h('div', { class: 'fx-sub' },
+      colorCtl({ label: '投影颜色', get: () => t.shadowColor, set: v => { t.shadowColor = v; },
+        swatches: [{ color: '#000000', tip: '黑色' }, { color: INK, tip: '深墨色' }, { color: '#FFFFFF', tip: '白色（发光）' }] }),
+      sliderCtl({ label: '浓度', min: 0, max: 100, get: () => t.shadowOpacity, set: v => { t.shadowOpacity = v; }, unit: '%' }),
+      sliderCtl({ label: '模糊', min: 0, max: 80, get: () => t.shadowBlur, set: v => { t.shadowBlur = v; }, unit: 'px', tip: '0 = 硬边投影' }),
+      sliderCtl({ label: '横向偏移', min: -40, max: 40, get: () => t.shadowX, set: v => { t.shadowX = v; }, unit: 'px' }),
+      sliderCtl({ label: '纵向偏移', min: -40, max: 40, get: () => t.shadowY, set: v => { t.shadowY = v; }, unit: 'px' }));
+    bindings.push(() => { shadowRows.hidden = !t.shadow; });
+    shadowRows.hidden = !t.shadow;
+    return group('描边和投影',
+      h('div', { class: 'btn-row fx-presets' },
+        h('button', { class: 'ghost', 'data-tip': '去掉描边和投影', onclick: fx({ strokeW: 0, shadow: false }) }, '无'),
+        h('button', { class: 'ghost', 'data-tip': '白色描边，压在照片上也清楚', onclick: fx({ strokeW: Math.max(4, Math.round(t.size * 0.06)), strokeColor: '#FFFFFF', shadow: false }) }, '白描边'),
+        h('button', { class: 'ghost', 'data-tip': '柔和的黑色投影', onclick: fx({ shadow: true, shadowColor: '#000000', shadowOpacity: 35, shadowBlur: 16, shadowX: 0, shadowY: 6 }) }, '柔投影'),
+        h('button', { class: 'ghost', 'data-tip': '模板色的硬边错位投影，杂志感', onclick: fx({ shadow: true, shadowColor: tpl(), shadowOpacity: 100, shadowBlur: 0, shadowX: Math.max(4, Math.round(t.size * 0.05)), shadowY: Math.max(4, Math.round(t.size * 0.05)) }) }, '错位投影'),
+        h('button', { class: 'ghost', 'data-tip': '白色描边 + 柔和投影，贴纸感', onclick: fx({ strokeW: Math.max(5, Math.round(t.size * 0.08)), strokeColor: '#FFFFFF', shadow: true, shadowColor: '#000000', shadowOpacity: 25, shadowBlur: 14, shadowX: 0, shadowY: 5 }) }, '贴纸')),
+      sliderCtl({ label: '描边粗细', min: 0, max: 40, get: () => t.strokeW, set: v => { t.strokeW = v; }, unit: 'px', tip: '0 = 不描边。描边只往字外面长，不会让字变细' }),
+      colorCtl({ label: '描边颜色', get: () => t.strokeColor, set: v => { t.strokeColor = v; },
+        swatches: [{ color: '#FFFFFF', tip: '白色' }, { color: INK, tip: '深墨色' }, { color: tpl(), tip: '当前模板色' }] }),
+      h('label', { class: 'check', title: '给文字加投影' },
+        h('input', { type: 'checkbox', checked: !!t.shadow, onchange: e => { t.shadow = e.target.checked; changed(); commit(); shadowRows.hidden = !t.shadow; } }), ' 投影'),
+      shadowRows);
+  }
   function weightOptionsWithCurrent(el) {
     const opts = Fonts.weightOptions(el.font);
     if (!opts.some(o => o.value === +el.weight)) opts.push({ value: +el.weight, label: (WEIGHT_NAMES[el.weight] || el.weight) + '（模拟）' });
@@ -862,6 +994,66 @@
     const b = bounds(id);
     el.x = Math.round((W - b.w) / 2);
     changed(); commit();
+  }
+
+  function shapeGroup() {
+    const b = state.block;
+    const presets = h('div', { class: 'shape-presets' }, ...SHAPE_PRESETS.map(pr => {
+      const pts = [];
+      for (let i = 0; i <= 20; i++) pts.push(`${(i / 20 * 60).toFixed(1)},${(12 + edgeOffset(pr.top, i / 20) * 0.09).toFixed(1)}`);
+      return h('button', {
+        class: 'shape-btn', 'data-tip': `上边改成「${pr.name}」`, onclick: () => applyShapePreset(pr),
+        html: `<svg viewBox="0 0 60 36" width="46" height="28"><polygon points="${pts.join(' ')} 60,36 0,36" fill="currentColor"/></svg><span>${pr.name}</span>`,
+      });
+    }));
+    return group('形状',
+      presets,
+      h('div', { class: 'btn-row' },
+        h('button', { class: shapeMode ? 'primary' : 'ghost', 'data-tip': '在画布上拖色块上下两条边的圆点，自由改形状（也可以双击色块）', onclick: () => setShapeMode(!shapeMode) }, shapeMode ? '✓ 完成，回到调大小' : '〰 在画布上拖点改形状'),
+        h('button', { class: 'ghost', 'data-tip': '上下两条边都恢复平直', onclick: () => { b.shape = flatShape(); ampBase = null; clampPhoto(); changed(); commit(); } }, '恢复平直')),
+      h('label', { class: 'check', title: '拖左边的点时，右边对应的点一起动' },
+        h('input', { type: 'checkbox', checked: shapeSym, onchange: e => { shapeSym = e.target.checked; } }), ' 左右对称拖动'),
+      sliderCtl({ label: '起伏', min: 0, max: 200, get: () => (ampBase ? Math.round(ampBase.cur * 100) : 100), set: v => scaleShape(v), unit: '%', tip: '按当前形状整体放大或缩小起伏' }));
+  }
+  // 起伏滑块：以开始拖滑块时的形状为基准等比缩放
+  let ampBase = null;
+  function scaleShape(v) {
+    const b = state.block;
+    if (!ampBase) ampBase = { shape: JSON.parse(JSON.stringify(blockShape(b))), cur: 1 };
+    ampBase.cur = v / 100;
+    b.shape = { top: ampBase.shape.top.map(x => Math.round(x * ampBase.cur)), bot: ampBase.shape.bot.map(x => Math.round(x * ampBase.cur)) };
+    clampPhoto();
+  }
+
+  function decoGroups(full) {
+    const d = state.deco;
+    const showIt = () => { d.visible = true; };
+    const out = [
+      group('金闪 ✦',
+        sliderCtl({ label: '数量', min: 0, max: 40, get: () => d.sparkle.count, set: v => { d.sparkle.count = v; showIt(); }, unit: '颗' }),
+        sliderCtl({ label: '大小', min: 12, max: 160, get: () => d.sparkle.size, set: v => { d.sparkle.size = v; }, unit: 'px', tip: '最大一颗的大小，其它的会随机小一些' }),
+        colorCtl({ label: '颜色', get: () => d.sparkle.color, set: v => { d.sparkle.color = v; },
+          swatches: [{ color: '#E6C36A', tip: '香槟金（默认）' }, { color: '#D9A441', tip: '浓金' }, { color: '#FFFFFF', tip: '白光' }, { color: '#C9CED6', tip: '银色' }] })),
+      group('泡泡 ○',
+        sliderCtl({ label: '数量', min: 0, max: 30, get: () => d.bubble.count, set: v => { d.bubble.count = v; showIt(); }, unit: '个' }),
+        sliderCtl({ label: '大小', min: 16, max: 220, get: () => d.bubble.size, set: v => { d.bubble.size = v; }, unit: 'px' }),
+        sliderCtl({ label: '透明度', min: 10, max: 100, get: () => d.bubble.opacity, set: v => { d.bubble.opacity = v; }, unit: '%' })),
+      group('碎光点 ·',
+        sliderCtl({ label: '数量', min: 0, max: 150, get: () => d.glitter.count, set: v => { d.glitter.count = v; showIt(); }, unit: '个' }),
+        sliderCtl({ label: '大小', min: 2, max: 20, get: () => d.glitter.size, set: v => { d.glitter.size = v; }, unit: 'px' }),
+        colorCtl({ label: '颜色', get: () => d.glitter.color, set: v => { d.glitter.color = v; },
+          swatches: [{ color: '#FFF1C2', tip: '暖白金（默认）' }, { color: '#E6C36A', tip: '金色' }, { color: '#FFFFFF', tip: '白色' }] })),
+      group('装饰位置',
+        segCtl({ label: '撒在', get: () => d.area, set: v => { d.area = v; },
+          options: [{ value: 'edge', label: '色块边缘', tip: '沿着色块上边撒一圈' }, { value: 'inside', label: '色块里', tip: '只撒在色块范围内' }, { value: 'all', label: '整张图', tip: '撒满整张封面' }] }),
+        h('label', { class: 'check', title: '默认在文字下面，不挡字' },
+          h('input', { type: 'checkbox', checked: d.front, onchange: e => { d.front = e.target.checked; changed(); commit(); } }), ' 盖在文字上面'),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'ghost', 'data-tip': '数量不变，重新随机摆放位置和大小', onclick: () => { d.seed = (d.seed * 48271 + 11) % 2147483647; changed(); commit(); } }, '换一种分布'),
+          h('button', { class: 'ghost danger', 'data-tip': '把金闪、泡泡、碎光点全部清零', onclick: () => { d.sparkle.count = d.bubble.count = d.glitter.count = 0; changed(); commit(); } }, '全部清除'))),
+    ];
+    if (full) out.unshift(h('p', { class: 'note' }, '金闪、泡泡、碎光点会沿着标题色块撒开，色块改形状它们也跟着走。位置是固定随机的，预览和导出完全一样。'));
+    return out;
   }
 
   function buildPanel() {
@@ -883,7 +1075,7 @@
           h('label', { class: 'check', title: '降低饱和度、稍微偏暖，让不同照片的色调更统一' },
             h('input', { type: 'checkbox', checked: state.photoSoft, onchange: e => { state.photoSoft = e.target.checked; changed(); commit(); } }), ' 照片柔和滤镜（低饱和、统一色调）'),
           h('div', { class: 'btn-row' },
-            h('button', { class: 'ghost', 'data-tip': '把这个版式的所有元素恢复到默认位置和样式（文字和照片保留）', onclick: () => { if (confirm('把当前版式的位置、字体、颜色都恢复默认？\n文字内容和照片会保留，可以 Ctrl+Z 撤销。')) resetLayoutPositions(); } }, '恢复本版式默认样式'))),
+            h('button', { class: 'ghost', 'data-tip': '把这个版式的所有元素恢复到默认位置和样式（文字和照片保留）', onclick: async () => { if (await ask('把当前版式的位置、字体、颜色都恢复默认？\n文字内容和照片会保留，可以 Ctrl+Z 撤销。', '恢复默认')) resetLayoutPositions(); } }, '恢复本版式默认样式'))),
         group('使用小贴士', h('ul', { class: 'tips' },
           h('li', null, '照片：直接拖进画布，或点顶部「上传照片」'),
           h('li', null, '点画布上的元素选中它，拖动移动位置'),
@@ -903,7 +1095,9 @@
         group('标题色块',
           colorCtl({ label: '颜色', get: () => tplColor(state), set: v => { state.templateColors[state.template] = v; rememberColors(state.templateColors); }, tip: `修改「${TEMPLATES[state.template].name}」模板的颜色，会自动记住` }),
           sliderCtl({ label: '透明度', min: 0, max: 100, get: () => b.opacity, set: v => { b.opacity = v; }, unit: '%', tip: '0 = 完全透明，100 = 完全不透明' }),
-          sliderCtl({ label: '圆角', min: 0, max: 300, get: () => b.radius, set: v => { b.radius = v; }, unit: 'px' })),
+          sliderCtl({ label: '圆角', min: 0, max: 300, get: () => b.radius, set: v => { b.radius = v; }, unit: 'px', tip: '只对平直的色块有效' })),
+        shapeGroup(),
+        ...decoGroups(),
         group('位置和大小',
           h('div', { class: 'num-row' },
             numCtl({ label: 'X', get: () => b.x, set: v => { b.x = v; } }),
@@ -916,6 +1110,8 @@
         group(null, h('p', { class: 'note' }, state.layout === 'index'
           ? '在画布上拖动四边或四角的小方块可以改变大小。色场编号版式里，照片只显示在色块上方，拖色块的上边就能调整照片高度。'
           : '在画布上拖动四边或四角的小方块可以改变大小。')));
+    } else if (id === 'deco') {
+      panel.append(...decoGroups(true));
     } else if (id === 'rule') {
       const r = state.rule;
       panel.append(
@@ -997,7 +1193,25 @@
   function titleSnippet(n = 8) {
     return (state.title.text || '').replace(/\s+/g, '').replace(/[\\/:*?"<>|]/g, '').slice(0, n) || '未命名';
   }
-  function downloadBlob(blob, name) {
+  /** 在线版（claude.ai）里只能通过 downloads 能力保存文件；本地打开时用普通下载 */
+  let dlCap;
+  async function downloadBlob(blob, name) {
+    if (window.claude && typeof window.claude.use === 'function') {
+      if (dlCap === undefined) { try { dlCap = await window.claude.use('downloads'); } catch (e) { dlCap = null; } }
+      if (dlCap) {
+        try { await dlCap.save({ filename: name, data: blob }); return true; }
+        catch (e) {
+          if (e && e.code === 'declined') { toast('已取消保存'); return false; }
+          if (e && e.code === 'rate_limited') { toast('上一个保存窗口还没关，稍后再试'); return false; }
+          toast('这里没法保存文件：' + ((e && (e.message || e.code)) || '未知原因'), 3600);
+          return false;
+        }
+      }
+    }
+    downloadLink(blob, name);
+    return true;
+  }
+  function downloadLink(blob, name) {
     const a = h('a', { href: URL.createObjectURL(blob), download: name });
     document.body.append(a);
     a.click();
@@ -1015,8 +1229,7 @@
     }
     const blob = new Blob([JSON.stringify(proj)], { type: 'application/json' });
     const name = `封面项目_${TEMPLATES[state.template].name}_${titleSnippet()}_${dateStr()}.json`;
-    downloadBlob(blob, name);
-    toast(`项目已保存：${name}`);
+    if (await downloadBlob(blob, name)) toast(`项目已保存：${name}`);
   }
   async function openProjectFile(file) {
     stopEdit();
@@ -1033,7 +1246,7 @@
       refreshAll();
       toast('项目已打开（可以 Ctrl+Z 回到打开前）');
     } catch (e) {
-      alert('打开失败：' + e.message);
+      ask('打开失败：' + e.message, '知道了', true);
     }
   }
 
@@ -1071,11 +1284,11 @@
     btn.disabled = true;
     try {
       const missing = await checkExportFonts();
-      if (missing.length && !confirm(`下面这些字体没有加载成功，导出后会变成系统默认字体：\n\n${missing.join('\n')}\n\n请按 README 把字体文件放进 fonts 文件夹。仍然要导出吗？`)) return;
+      if (missing.length && !(await ask(`下面这些字体没有加载成功，导出后会变成系统默认字体：\n\n${missing.join('\n')}\n\n请按 README 把字体文件放进 fonts 文件夹。仍然要导出吗？`, '仍然导出'))) return;
       const c = renderFull();
       const blob = await new Promise(r => c.toBlob(r, 'image/png'));
       const name = `${TEMPLATES[state.template].name}_${titleSnippet()}_${dateStr()}.png`;
-      downloadBlob(blob, name);
+      if (!(await downloadBlob(blob, name))) return;
       await DB.put('gallery', {
         id: 'g' + Date.now(), time: Date.now(), template: state.template,
         title: state.title.text.replace(/\n/g, ''), thumb: thumbOf(c),
@@ -1182,11 +1395,11 @@
     if (mod && k === 's') { e.preventDefault(); saveProject(); return; }
     if (mod && k === 'e') { e.preventDefault(); exportPNG(); return; }
     if (typing) return;
-    if (k === 'escape') { if (!$('#previewModal').hidden) Preview.close(); else select(null); return; }
+    if (k === 'escape') { if (!$('#previewModal').hidden) Preview.close(); else if (shapeMode) setShapeMode(false); else select(null); return; }
     if (!selected) return;
     if (k === 'enter' && TEXT_IDS.includes(selected)) { e.preventDefault(); startEdit(selected); return; }
     const arrows = { arrowleft: [-1, 0], arrowright: [1, 0], arrowup: [0, -1], arrowdown: [0, 1] };
-    if (arrows[k] && !state[selected].locked) {
+    if (arrows[k] && !state[selected].locked && selected !== 'deco') {
       e.preventDefault();
       const [dx, dy] = arrows[k].map(v => v * (e.shiftKey ? 10 : 1));
       if (selected === 'photo') { state.photo.ox += dx; state.photo.oy += dy; clampPhoto(); }
@@ -1208,8 +1421,8 @@
     $('#btnOpen').onclick = () => $('#fileProject').click();
     $('#btnSave').onclick = saveProject;
     $('#btnExport').onclick = exportPNG;
-    $('#btnNew').onclick = () => {
-      if (!confirm('新建一张空白封面？\n当前内容会被清空（可以用 Ctrl+Z 找回）。模板颜色和版式会保留。')) return;
+    $('#btnNew').onclick = async () => {
+      if (!(await ask('新建一张空白封面？\n当前内容会被清空（可以用 Ctrl+Z 找回）。模板颜色和版式会保留。', '新建'))) return;
       stopEdit();
       const keep = { template: state.template, layout: state.layout };
       state = defaultState();
@@ -1228,7 +1441,7 @@
     $('#pvClose').onclick = () => Preview.close();
     $('#previewModal').addEventListener('click', e => { if (e.target.id === 'previewModal') Preview.close(); });
     $('#pvIncludeCurrent').onchange = e => { Preview.includeCurrent = e.target.checked; Preview.refresh(); };
-    $('#pvClear').onclick = async () => { if (confirm('清空主页预览里的所有封面？（不会删除已导出的图片文件）')) { await DB.clear('gallery'); Preview.refresh(); } };
+    $('#pvClear').onclick = async () => { if (await ask('清空主页预览里的所有封面？（不会删除已导出的图片文件）', '清空')) { await DB.clear('gallery'); Preview.refresh(); } };
     $('#pvAdd').onclick = () => $('#filePreviewAdd').click();
     pick($('#filePreviewAdd'), async fs => {
       for (const f of fs.filter(f => f.type.startsWith('image/'))) {
@@ -1248,6 +1461,15 @@
     });
     $('#pvName').addEventListener('blur', () => Preview.refresh());
   }
+
+  // ---------------------------------------------------------------- 手机布局：画布在上，下面分页
+  const isMobile = () => window.matchMedia('(max-width: 820px)').matches;
+  function setMobileTab(tab) {
+    document.body.dataset.mtab = tab;
+    document.querySelectorAll('#mTabs button').forEach(b => b.classList.toggle('active', b.dataset.mtab === tab));
+  }
+  document.querySelectorAll('#mTabs button').forEach(b => b.addEventListener('click', () => setMobileTab(b.dataset.mtab)));
+  setMobileTab('panel');
 
   function refreshAll() {
     layersSig = '';

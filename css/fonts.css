@@ -6,79 +6,64 @@
 
 /* ---------- 思源宋体 Noto Serif SC ---------- */
 @font-face { font-family: "Noto Serif SC"; font-weight: 400; font-display: block;
-  src: url("../fonts/NotoSerifSC-Regular.ttf"), url("../fonts/NotoSerifSC-Regular.otf"), url("../fonts/NotoSerifSC-Regular.woff2") format("woff2"),
-       local("Noto Serif SC Regular"), local("NotoSerifSC-Regular"), local("Source Han Serif SC"), local("SourceHanSerifSC-Regular"); }
+  src: url("../fonts/NotoSerifSC-Regular.woff2") format("woff2"); }
 @font-face { font-family: "Noto Serif SC"; font-weight: 700; font-display: block;
-  src: url("../fonts/NotoSerifSC-Bold.ttf"), url("../fonts/NotoSerifSC-Bold.otf"), url("../fonts/NotoSerifSC-Bold.woff2") format("woff2"),
-       local("Noto Serif SC Bold"), local("NotoSerifSC-Bold"), local("Source Han Serif SC Bold"), local("SourceHanSerifSC-Bold"); }
+  src: url("../fonts/NotoSerifSC-Bold.woff2") format("woff2"); }
 @font-face { font-family: "Noto Serif SC"; font-weight: 900; font-display: block;
-  src: url("../fonts/NotoSerifSC-Black.ttf"), url("../fonts/NotoSerifSC-Black.otf"), url("../fonts/NotoSerifSC-Black.woff2") format("woff2"),
-       local("Noto Serif SC Black"), local("NotoSerifSC-Black"), local("Source Han Serif SC Heavy"), local("SourceHanSerifSC-Heavy"); }
+  src: url("../fonts/NotoSerifSC-Black.woff2") format("woff2"); }
 
 /* ---------- 思源黑体 Noto Sans SC ---------- */
 @font-face { font-family: "Noto Sans SC"; font-weight: 300; font-display: block;
-  src: url("../fonts/NotoSansSC-Light.ttf"), url("../fonts/NotoSansSC-Light.otf"), url("../fonts/NotoSansSC-Light.woff2") format("woff2"),
-       local("Noto Sans SC Light"), local("NotoSansSC-Light"), local("Source Han Sans SC Light"), local("SourceHanSansSC-Light"); }
+  src: url("../fonts/NotoSansSC-Light.woff2") format("woff2"); }
 @font-face { font-family: "Noto Sans SC"; font-weight: 400; font-display: block;
-  src: url("../fonts/NotoSansSC-Regular.ttf"), url("../fonts/NotoSansSC-Regular.otf"), url("../fonts/NotoSansSC-Regular.woff2") format("woff2"),
-       local("Noto Sans SC Regular"), local("NotoSansSC-Regular"), local("Source Han Sans SC"), local("SourceHanSansSC-Regular"); }
+  src: url("../fonts/NotoSansSC-Regular.woff2") format("woff2"); }
 @font-face { font-family: "Noto Sans SC"; font-weight: 500; font-display: block;
-  src: url("../fonts/NotoSansSC-Medium.ttf"), url("../fonts/NotoSansSC-Medium.otf"), url("../fonts/NotoSansSC-Medium.woff2") format("woff2"),
-       local("Noto Sans SC Medium"), local("NotoSansSC-Medium"), local("Source Han Sans SC Medium"), local("SourceHanSansSC-Medium"); }
+  src: url("../fonts/NotoSansSC-Medium.woff2") format("woff2"); }
 @font-face { font-family: "Noto Sans SC"; font-weight: 700; font-display: block;
-  src: url("../fonts/NotoSansSC-Bold.ttf"), url("../fonts/NotoSansSC-Bold.otf"), url("../fonts/NotoSansSC-Bold.woff2") format("woff2"),
-       local("Noto Sans SC Bold"), local("NotoSansSC-Bold"), local("Source Han Sans SC Bold"), local("SourceHanSansSC-Bold"); }
+  src: url("../fonts/NotoSansSC-Bold.woff2") format("woff2"); }
 @font-face { font-family: "Noto Sans SC"; font-weight: 900; font-display: block;
-  src: url("../fonts/NotoSansSC-Black.ttf"), url("../fonts/NotoSansSC-Black.otf"), url("../fonts/NotoSansSC-Black.woff2") format("woff2"),
-       local("Noto Sans SC Black"), local("NotoSansSC-Black"), local("Source Han Sans SC Heavy"), local("SourceHanSansSC-Heavy"); }
+  src: url("../fonts/NotoSansSC-Black.woff2") format("woff2"); }
 
 /* ---------- 得意黑 Smiley Sans ---------- */
 @font-face { font-family: "Smiley Sans"; font-weight: 400; font-display: block;
-  src: url("../fonts/SmileySans-Oblique.woff2") format("woff2"), url("../fonts/SmileySans-Oblique.ttf"), url("../fonts/SmileySans-Oblique.otf"),
-       local("Smiley Sans Oblique"), local("SmileySans-Oblique"), local("得意黑"); }
+  src: url("../fonts/SmileySans-Oblique.woff2") format("woff2"); }
 
 /* ---------- 霞鹜文楷 LXGW WenKai ---------- */
 @font-face { font-family: "LXGW WenKai"; font-weight: 400; font-display: block;
-  src: url("../fonts/LXGWWenKai-Regular.ttf"), url("../fonts/LXGWWenKai-Regular.otf"), url("../fonts/LXGWWenKai-Regular.woff2") format("woff2"),
-       local("LXGW WenKai"), local("LXGWWenKai-Regular"), local("霞鹜文楷"); }
+  src: url("../fonts/LXGWWenKai-Regular.woff2") format("woff2"); }
 
 /* ---------- 站酷快乐体 ZCOOL KuaiLe ---------- */
 @font-face { font-family: "ZCOOL KuaiLe"; font-weight: 400; font-display: block;
-  src: url("../fonts/ZCOOLKuaiLe-Regular.ttf"), url("../fonts/ZCOOLKuaiLe-Regular.otf"), url("../fonts/ZCOOLKuaiLe-Regular.woff2") format("woff2"),
-       local("ZCOOL KuaiLe"), local("ZCOOLKuaiLe-Regular"), local("站酷快乐体2016修订版"); }
+  src: url("../fonts/ZCOOLKuaiLe-Regular.woff2") format("woff2"); }
 
 /* ---------- 英文字体（全部 SIL OFL 1.1，可变字重：一个文件包含多个字重） ---------- */
 @font-face { font-family: "Bodoni Moda"; font-weight: 400 900; font-style: normal; font-display: block;
-  src: url("../fonts/BodoniModa.ttf"), local("Bodoni Moda"); }
+  src: url("../fonts/BodoniModa.woff2") format("woff2"); }
 @font-face { font-family: "Bodoni Moda"; font-weight: 400 900; font-style: italic; font-display: block;
-  src: url("../fonts/BodoniModa-Italic.ttf"), local("Bodoni Moda Italic"); }
+  src: url("../fonts/BodoniModa-Italic.woff2") format("woff2"); }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: normal; font-display: block;
-  src: url("../fonts/CormorantGaramond.ttf"), local("Cormorant Garamond"); }
+  src: url("../fonts/CormorantGaramond.woff2") format("woff2"); }
 @font-face { font-family: "Cormorant Garamond"; font-weight: 300 700; font-style: italic; font-display: block;
-  src: url("../fonts/CormorantGaramond-Italic.ttf"), local("Cormorant Garamond Italic"); }
+  src: url("../fonts/CormorantGaramond-Italic.woff2") format("woff2"); }
 @font-face { font-family: "Playfair Display"; font-weight: 400 900; font-style: normal; font-display: block;
-  src: url("../fonts/PlayfairDisplay.ttf"), local("Playfair Display"); }
+  src: url("../fonts/PlayfairDisplay.woff2") format("woff2"); }
 @font-face { font-family: "Playfair Display"; font-weight: 400 900; font-style: italic; font-display: block;
-  src: url("../fonts/PlayfairDisplay-Italic.ttf"), local("Playfair Display Italic"); }
+  src: url("../fonts/PlayfairDisplay-Italic.woff2") format("woff2"); }
 @font-face { font-family: "Inter"; font-weight: 100 900; font-display: block;
-  src: url("../fonts/Inter.ttf"), local("Inter"); }
+  src: url("../fonts/Inter.woff2") format("woff2"); }
 @font-face { font-family: "DM Mono"; font-weight: 400; font-display: block;
-  src: url("../fonts/DMMono-Regular.ttf"), local("DM Mono"); }
+  src: url("../fonts/DMMono-Regular.woff2") format("woff2"); }
 @font-face { font-family: "DM Mono"; font-weight: 500; font-display: block;
-  src: url("../fonts/DMMono-Medium.ttf"), local("DM Mono Medium"); }
+  src: url("../fonts/DMMono-Medium.woff2") format("woff2"); }
 @font-face { font-family: "Caveat"; font-weight: 400 700; font-display: block;
-  src: url("../fonts/Caveat.ttf"), local("Caveat"); }
+  src: url("../fonts/Caveat.woff2") format("woff2"); }
 
 /* ---------- 阿里巴巴普惠体 3.0 Alibaba PuHuiTi ---------- */
 @font-face { font-family: "Alibaba PuHuiTi"; font-weight: 400; font-display: block;
-  src: url("../fonts/AlibabaPuHuiTi-Regular.ttf"), url("../fonts/AlibabaPuHuiTi-Regular.otf"), url("../fonts/AlibabaPuHuiTi-Regular.woff2") format("woff2"),
-       local("Alibaba PuHuiTi 3.0 55 Regular"), local("AlibabaPuHuiTi-3-55-Regular"), local("Alibaba PuHuiTi Regular"), local("AlibabaPuHuiTi-Regular"); }
+  src: url("../fonts/AlibabaPuHuiTi-Regular.woff2") format("woff2"); }
 @font-face { font-family: "Alibaba PuHuiTi"; font-weight: 500; font-display: block;
-  src: url("../fonts/AlibabaPuHuiTi-Medium.ttf"), url("../fonts/AlibabaPuHuiTi-Medium.otf"), url("../fonts/AlibabaPuHuiTi-Medium.woff2") format("woff2"),
-       local("Alibaba PuHuiTi 3.0 65 Medium"), local("AlibabaPuHuiTi-3-65-Medium"), local("AlibabaPuHuiTi-Medium"); }
+  src: url("../fonts/AlibabaPuHuiTi-Medium.woff2") format("woff2"); }
 @font-face { font-family: "Alibaba PuHuiTi"; font-weight: 700; font-display: block;
-  src: url("../fonts/AlibabaPuHuiTi-Bold.ttf"), url("../fonts/AlibabaPuHuiTi-Bold.otf"), url("../fonts/AlibabaPuHuiTi-Bold.woff2") format("woff2"),
-       local("Alibaba PuHuiTi 3.0 85 Bold"), local("AlibabaPuHuiTi-3-85-Bold"), local("AlibabaPuHuiTi-Bold"); }
+  src: url("../fonts/AlibabaPuHuiTi-Bold.woff2") format("woff2"); }
 @font-face { font-family: "Alibaba PuHuiTi"; font-weight: 800; font-display: block;
-  src: url("../fonts/AlibabaPuHuiTi-ExtraBold.ttf"), url("../fonts/AlibabaPuHuiTi-ExtraBold.otf"), url("../fonts/AlibabaPuHuiTi-ExtraBold.woff2") format("woff2"),
-       local("Alibaba PuHuiTi 3.0 95 ExtraBold"), local("AlibabaPuHuiTi-3-95-ExtraBold"), local("AlibabaPuHuiTi-ExtraBold"); }
+  src: url("../fonts/AlibabaPuHuiTi-ExtraBold.woff2") format("woff2"); }

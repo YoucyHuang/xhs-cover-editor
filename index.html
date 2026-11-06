@@ -38,15 +38,15 @@
 
   <main class="layout">
     <aside class="left">
-      <section class="side-sec">
+      <section class="side-sec m-style">
         <h3>版式 <span class="h-note">文字照片保留</span></h3>
         <div id="layoutPick" class="layout-pick"></div>
       </section>
-      <section class="side-sec">
+      <section class="side-sec m-style">
         <h3>模板颜色 <span class="h-note">改完自动记住</span></h3>
         <div id="tplColors"></div>
       </section>
-      <section class="side-sec grow">
+      <section class="side-sec grow m-layers">
         <h3>图层 <span class="h-note">点击选中</span></h3>
         <ul id="layers"></ul>
       </section>
@@ -60,6 +60,11 @@
       <div class="stage-info"><span id="zoomInfo"></span><span id="saveInfo"></span></div>
     </section>
 
+    <nav class="m-tabs" id="mTabs">
+      <button data-mtab="panel">编辑</button>
+      <button data-mtab="layers">图层</button>
+      <button data-mtab="style">版式 · 颜色</button>
+    </nav>
     <aside class="right" id="panel"></aside>
   </main>
 
@@ -108,6 +113,7 @@
   <input type="file" id="fileProject" accept=".json,application/json" hidden>
   <input type="file" id="filePreviewAdd" accept="image/*" multiple hidden>
 
+  <script>window.COVER_ONLINE = true;</script>
   <script src="js/db.js"></script>
   <script src="js/fonts.js"></script>
   <script src="js/render.js"></script>
