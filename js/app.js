@@ -62,6 +62,8 @@
       place: { text: 'Somewhere, Oct.' },
       sign: { assetId: null },
       deco: defaultDeco(),
+      palette: null,                 // 色系：null = 跟随版式自带的
+      sealText: '自在', byline: '—— 你的账号名', giantChar: '静',
     };
     applyLayout(st, layoutDefaults('classic'));
     return st;
@@ -71,7 +73,7 @@
   function normalize(st) {
     if (!st || typeof st !== 'object') return defaultState();
     const d = defaultState();
-    if (st.layout === 'index') applyLayout(d, layoutDefaults('index'));
+    if (st.layout && st.layout !== 'classic' && LAYOUTS[st.layout]) applyLayout(d, layoutDefaults(st.layout));
     const out = { ...d, ...st };
     for (const k of ['photo', 'templateColors', 'tagTexts'].concat(LAYOUT_KEYS)) {
       out[k] = { ...d[k], ...(st[k] || {}) };
@@ -82,6 +84,8 @@
     const dd = defaultDeco(), sd = st.deco || {};
     out.deco = { ...dd, ...sd, sparkle: { ...dd.sparkle, ...(sd.sparkle || {}) }, bubble: { ...dd.bubble, ...(sd.bubble || {}) }, glitter: { ...dd.glitter, ...(sd.glitter || {}) } };
     if (!out.block.shape || !Array.isArray(out.block.shape.top)) out.block.shape = flatShape();
+    out.texture = Object.assign(noTexture(), d.texture, st.texture || {});
+    if (out.palette && !PALETTES[out.palette]) out.palette = null;
     return out;
   }
 
@@ -257,14 +261,19 @@
       Fonts.ensure(el.font, el.weight, el.italic).then(scheduleRender);
     }
   }
+  // 质感很费时：拖照片、拖滑块的时候先画不带质感的快速预览，停下来再画完整的
+  let fastUntil = 0, slowTimer = null;
+  function slowSoon() { fastUntil = performance.now() + 350; clearTimeout(slowTimer); slowTimer = setTimeout(scheduleRender, 420); }
   function render() {
     ensureFonts();
-    drawScene(ctx, state, assets, { skipText: editing });
+    const fast = !!(drag && drag.moved && (drag.type === 'photo' || drag.id === 'block')) || performance.now() < fastUntil;
+    drawScene(ctx, state, assets, { skipText: editing, fast });
     drawOverlay();
     syncPanel();
     renderLayers();
     renderTemplateUI();
     renderLayoutUI();
+    renderPalUI();
   }
   function bounds(id) { return elementBounds(measureCtx, state, assets, id); }
 
@@ -326,7 +335,7 @@
     if (!el.locked) {
       let dirs = [];
       if (selected === 'block') dirs = ['n', 's', 'e', 'w', 'ne', 'nw', 'se', 'sw'];
-      else if (BOX_TEXT.includes(selected) || selected === 'rule') dirs = ['e', 'w'];
+      else if ((BOX_TEXT.includes(selected) && !el.vertical) || selected === 'rule') dirs = ['e', 'w'];
       else if (selected === 'sign') dirs = ['ne', 'nw', 'se', 'sw'];
       for (const d of dirs) box.append(h('div', { class: 'handle h-' + d, 'data-handle': d, title: '拖动改变大小' }));
     }
@@ -591,6 +600,7 @@
     e.preventDefault();
     const p = state.photo;
     p.scale = Math.max(1, Math.min(4, p.scale * (e.deltaY < 0 ? 1.05 : 1 / 1.05)));
+    slowSoon();
     clampPhoto();
     changed();
     commitSoon();
@@ -637,7 +647,7 @@
     if (!editorEl || !editing) return;
     const id = editing, el = state[id], s = scale;
     const b = bounds(id);
-    let x = el.x, y = el.y, w = el.w;
+    let x = el.x, y = el.y, w = el.vertical ? Math.max(b.w, el.size * 4) : el.w;
     if (id === 'tag') { const p = tagPadding(el); x = b.x + p.x; y = b.y + p.y; w = Math.max(b.w - p.x * 2, el.size * 2) + el.size; }
     else if (id === 'chips') { y = b.y + (b.h - el.size * el.lineHeight) / 2; w = Math.max(b.w, el.size * 8) + el.size * 2; }
     Object.assign(editorEl.style, {
@@ -671,7 +681,7 @@
     if (!TEMPLATES[t] || state.template === t) return;
     stopEdit();
     state.template = t;
-    changed(); commit();
+    changed(); commit(); refreshThumbs();
     buildPanel();
     toast(`已切换到「${TEMPLATES[t].name}」模板，文字和照片都保留`);
   }
@@ -721,6 +731,7 @@
     applyLayout(state, JSON.parse(JSON.stringify(L)));
     state.layout = id;
     clampPhoto();
+    setTimeout(refreshThumbs, 50);
     selected = null;
     changed(); commit();
     buildPanel();
@@ -739,14 +750,15 @@
     box.innerHTML = '';
     for (const [id, L] of Object.entries(LAYOUTS)) {
       box.append(h('button', { class: 'layout-btn', 'data-layout': id, 'data-tip': `${L.desc}（文字和照片保留）`, onclick: () => setLayout(id) },
-        h('span', { class: 'lo-mini lo-' + id }, h('i'), h('b'), h('em')),
+        h('img', { class: 'lo-thumb', alt: '' }),
         h('span', { class: 'lo-name' }, L.name)));
     }
+    refreshThumbs();
   }
   function renderLayoutUI() {
     document.querySelectorAll('#layoutPick .layout-btn').forEach(b => {
       b.classList.toggle('active', b.dataset.layout === state.layout);
-      b.querySelector('.lo-mini').style.setProperty('--tpl', tplColor(state));
+
     });
   }
 
@@ -823,15 +835,20 @@
     bindings.push(upd); upd();
     return h('label', { class: 'num-field', title: tip || label }, h('span', null, label), n);
   }
-  function colorCtl({ label, get, set, tip, swatches = [] }) {
+  function colorCtl({ label, get, set, tip, swatches = [], roles = false }) {
     const c = h('input', { type: 'color', title: '打开取色器' });
     const t = h('input', { type: 'text', class: 'hex-input', maxlength: 7, title: '也可以直接输入色号，例如 #22221F' });
-    const upd = () => { const v = get(); if (!isFocused(c)) c.value = v; if (!isFocused(t)) t.value = v.toUpperCase(); };
+    const upd = () => {
+      const raw = get() || INK, v = col(raw, state);
+      if (!isFocused(c)) c.value = v;
+      if (!isFocused(t)) t.value = raw[0] === '@' ? '随' + COLOR_ROLES[raw.slice(1)] : v.toUpperCase();
+    };
+    if (roles) swatches = Object.entries(COLOR_ROLES).map(([k, n]) => ({ color: '@' + k, tip: `跟随色系的${n}（换色系会一起变）`, role: true })).concat(swatches);
     c.addEventListener('input', () => { set(c.value); t.value = c.value.toUpperCase(); changed(); });
     c.addEventListener('change', commit);
     t.addEventListener('input', () => { if (/^#[0-9a-f]{6}$/i.test(t.value)) { set(t.value); c.value = t.value; changed(); } });
     t.addEventListener('change', () => { commit(); upd(); });
-    const sw = swatches.map(s => h('button', { class: 'sw', style: { background: s.color }, 'data-tip': s.tip, onclick: () => { set(s.color); changed(); commit(); } }));
+    const sw = swatches.map(s => h('button', { class: 'sw' + (s.role ? ' role' : ''), style: { background: col(s.color, state) }, 'data-tip': s.tip, onclick: () => { set(s.color); changed(); commit(); } }));
     bindings.push(upd); upd();
     return field(label, h('div', { class: 'color-row' }, h('label', { class: 'swatch big' }, c), t, ...sw), tip);
   }
@@ -914,13 +931,17 @@
         options: [{ value: false, label: '正体', tip: '正常字形' }, { value: true, label: '斜体', tip: '斜体（Bodoni、Cormorant、Playfair 有真正的斜体，其他字体会自动倾斜）' }],
       }),
       colorCtl({
-        label: '颜色', get: () => t.color, set: v => { t.color = v; },
-        swatches: [{ color: INK, tip: '深墨色 #22221F（默认）' }, { color: '#FFFFFF', tip: '白色' }, { color: '#6B6760', tip: '暖灰 #6B6760' }],
+        label: '颜色', get: () => t.color, set: v => { t.color = v; }, roles: true,
+        swatches: [{ color: '#FFFFFF', tip: '白色' }, { color: INK, tip: '深墨色 #22221F' }],
       }),
       sliderCtl({ label: '行距', min: 0.8, max: 2.5, step: 0.02, digits: 2, get: () => t.lineHeight, set: v => { t.lineHeight = v; }, unit: '倍' }),
       sliderCtl({ label: '字间距', min: -20, max: 80, get: () => t.letterSpacing, set: v => { t.letterSpacing = v; }, unit: 'px', tip: '每个字之间额外加的距离（按导出尺寸 1242px 计）' }),
     ];
     if (BOX_TEXT.includes(id)) {
+      rows.push(segCtl({
+        label: '排列', get: () => !!t.vertical, set: v => { t.vertical = v; },
+        options: [{ value: false, label: '横排', tip: '横着写' }, { value: true, label: '竖排', tip: '竖着写，从右往左一列一列排；回车 = 换一列' }],
+      }));
       rows.push(segCtl({
         label: '对齐', get: () => t.align, set: v => { t.align = v; },
         options: [{ value: 'left', label: '左', tip: '左对齐' }, { value: 'center', label: '中', tip: '居中对齐' }, { value: 'right', label: '右', tip: '右对齐' }],
@@ -962,8 +983,8 @@
     const tpl = () => tplColor(state);
     const fx = (o) => () => { Object.assign(t, o); changed(); commit(); buildPanel(); };
     const shadowRows = h('div', { class: 'fx-sub' },
-      colorCtl({ label: '投影颜色', get: () => t.shadowColor, set: v => { t.shadowColor = v; },
-        swatches: [{ color: '#000000', tip: '黑色' }, { color: INK, tip: '深墨色' }, { color: '#FFFFFF', tip: '白色（发光）' }] }),
+      colorCtl({ label: '投影颜色', get: () => t.shadowColor, set: v => { t.shadowColor = v; }, roles: true,
+        swatches: [{ color: '#000000', tip: '黑色' }, { color: '#FFFFFF', tip: '白色（发光）' }] }),
       sliderCtl({ label: '浓度', min: 0, max: 100, get: () => t.shadowOpacity, set: v => { t.shadowOpacity = v; }, unit: '%' }),
       sliderCtl({ label: '模糊', min: 0, max: 80, get: () => t.shadowBlur, set: v => { t.shadowBlur = v; }, unit: 'px', tip: '0 = 硬边投影' }),
       sliderCtl({ label: '横向偏移', min: -40, max: 40, get: () => t.shadowX, set: v => { t.shadowX = v; }, unit: 'px' }),
@@ -978,8 +999,8 @@
         h('button', { class: 'ghost', 'data-tip': '模板色的硬边错位投影，杂志感', onclick: fx({ shadow: true, shadowColor: tpl(), shadowOpacity: 100, shadowBlur: 0, shadowX: Math.max(4, Math.round(t.size * 0.05)), shadowY: Math.max(4, Math.round(t.size * 0.05)) }) }, '错位投影'),
         h('button', { class: 'ghost', 'data-tip': '白色描边 + 柔和投影，贴纸感', onclick: fx({ strokeW: Math.max(5, Math.round(t.size * 0.08)), strokeColor: '#FFFFFF', shadow: true, shadowColor: '#000000', shadowOpacity: 25, shadowBlur: 14, shadowX: 0, shadowY: 5 }) }, '贴纸')),
       sliderCtl({ label: '描边粗细', min: 0, max: 40, get: () => t.strokeW, set: v => { t.strokeW = v; }, unit: 'px', tip: '0 = 不描边。描边只往字外面长，不会让字变细' }),
-      colorCtl({ label: '描边颜色', get: () => t.strokeColor, set: v => { t.strokeColor = v; },
-        swatches: [{ color: '#FFFFFF', tip: '白色' }, { color: INK, tip: '深墨色' }, { color: tpl(), tip: '当前模板色' }] }),
+      colorCtl({ label: '描边颜色', get: () => t.strokeColor, set: v => { t.strokeColor = v; }, roles: true,
+        swatches: [{ color: '#FFFFFF', tip: '白色' }, { color: INK, tip: '深墨色' }] }),
       h('label', { class: 'check', title: '给文字加投影' },
         h('input', { type: 'checkbox', checked: !!t.shadow, onchange: e => { t.shadow = e.target.checked; changed(); commit(); shadowRows.hidden = !t.shadow; } }), ' 投影'),
       shadowRows);
@@ -1056,6 +1077,97 @@
     return out;
   }
 
+  const TEXTURE_TYPES = [['none', '原图'], ['mist', '细密水雾'], ['drops', '大颗水珠'], ['flow', '流痕'], ['rain', '雨丝'], ['frost', '磨砂'], ['blur', '纯模糊']];
+  function textureGroup() {
+    const tx = () => state.texture || (state.texture = noTexture());
+    const btns = TEXTURE_TYPES.map(([k, n]) => h('button', { class: 'chip-btn', 'data-tip': n === '原图' ? '不加质感' : `给照片罩一层「${n}」`, onclick: () => { tx().type = k; changed(); commit(); } }, n));
+    bindings.push(() => btns.forEach((b, i) => b.classList.toggle('active', tx().type === TEXTURE_TYPES[i][0])));
+    const L = LAYOUTS[state.layout] || {};
+    return group('背景质感（罩在照片上）',
+      h('div', { class: 'chip-grid' }, ...btns),
+      sliderCtl({ label: '强度', min: 5, max: 100, get: () => tx().strength, set: v => { tx().strength = v; slowSoon(); }, unit: '%' }),
+      h('div', { class: 'btn-row' }, h('button', { class: 'ghost', 'data-tip': '水珠、雨痕重新随机摆一次', onclick: () => { tx().seed = (tx().seed * 48271 + 11) % 99991; changed(); commit(); } }, '换一种水珠分布')),
+      L.circle && h('p', { class: 'note' }, '圆形取景：质感只罩在圆圈外面，圈里是清楚的照片。'),
+      L.fog && h('p', { class: 'note' }, '雾窗写字：整张玻璃起雾，主标题的笔画是透的，拖动主标题就是换个地方写。'));
+  }
+  function paletteGroup() {
+    const p = state.palette ? PALETTES[state.palette] : null;
+    const L = LAYOUTS[state.layout] || {};
+    const auto = L.pal ? PALETTES[L.pal] : null;
+    return group('色系',
+      h('p', { class: 'note' }, p ? `当前：${p.fam} · ${p.name}` : auto ? `当前：跟随版式（${auto.fam} · ${auto.name}）` : '当前：跟随模板颜色',
+        h('br'), '在左边「色系」里换。文字、色块选「随浅色 / 随深色」这类颜色时，会跟着色系一起变。'));
+  }
+  function decorTextGroup() {
+    const decor = (LAYOUTS[state.layout] || {}).decor || [];
+    const has = t => decor.some(d => d.type === t);
+    if (!has('seal') && !has('byline') && !has('giant')) return null;
+    const input = (label, key, max, tip) => {
+      const i = h('input', { type: 'text', class: 'text-line', maxlength: max, title: tip });
+      bindings.push(() => { if (!isFocused(i)) i.value = state[key] || ''; });
+      i.addEventListener('input', () => { state[key] = i.value; changed(); commitSoon(); });
+      return field(label, i, tip);
+    };
+    return group('版式装饰文字',
+      has('seal') && input('印章', 'sealText', 2, '印章里的字，1–2 个字'),
+      has('byline') && input('署名', 'byline', 20, '比如：—— 你的账号名'),
+      has('giant') && input('巨字', 'giantChar', 1, '画面里那个超大的半透明字'));
+  }
+
+  // ---------------------------------------------------------------- 左栏：色系
+  function buildPalPick() {
+    const box = $('#palPick');
+    box.innerHTML = '';
+    const chip = (k, label, colors, tip) => h('button', { class: 'pal-chip', 'data-pal': k || '', 'data-tip': tip, onclick: () => setPalette(k) },
+      h('span', { class: 'pal-dots' }, ...colors.map(c => h('i', { style: { background: c } }))), h('span', null, label));
+    box.append(chip(null, '跟随版式', ['#ddd', '#bbb', '#888'], '用每个版式自带的颜色'));
+    for (const fam of ['莫兰蒂', '多巴胺']) {
+      box.append(h('div', { class: 'pal-fam' }, fam));
+      for (const [k, p] of Object.entries(PALETTES)) if (p.fam === fam) box.append(chip(k, p.name, [p.light, p.mid, p.accent, p.deep], `${fam} · ${p.name}`));
+    }
+  }
+  function renderPalUI() {
+    document.querySelectorAll('#palPick .pal-chip').forEach(b => b.classList.toggle('active', (b.dataset.pal || null) === (state.palette || null)));
+  }
+  function setPalette(k) {
+    state.palette = k;
+    changed(); commit();
+    buildPanel(); refreshThumbs();
+    toast(k ? `色系：${PALETTES[k].fam} · ${PALETTES[k].name}` : '色系：跟随版式');
+  }
+
+  // ---------------------------------------------------------------- 版式缩略图（用当前照片、文字、色系实时画）
+  let thumbTimer = null;
+  function refreshThumbs() { clearTimeout(thumbTimer); thumbTimer = setTimeout(drawThumbs, 300); }
+  const thumbCanvas = document.createElement('canvas');
+  thumbCanvas.width = W; thumbCanvas.height = H;
+  const thumbFontsAsked = new Set();
+  function drawThumbs() {
+    const small = document.createElement('canvas');
+    small.width = 120; small.height = 160;
+    const sg = small.getContext('2d');
+    sg.imageSmoothingQuality = 'high';
+    const pending = [];
+    document.querySelectorAll('#layoutPick .layout-btn').forEach(btn => {
+      const id = btn.dataset.layout;
+      const st = JSON.parse(JSON.stringify(state));
+      st.layout = id;
+      applyLayout(st, (state.layout === id ? pickLayout(state) : state.layoutStore[id]) || layoutDefaults(id));
+      for (const t of TEXT_IDS) {
+        const el = st[t], key = el.font + '|' + el.weight + '|' + !!el.italic;
+        if (el.visible && !thumbFontsAsked.has(key)) { thumbFontsAsked.add(key); pending.push(Fonts.ensure(el.font, el.weight, el.italic)); }
+      }
+      try {
+        drawScene(thumbCanvas.getContext('2d'), st, assets, { fast: true, thumb: true });
+        sg.clearRect(0, 0, 120, 160);
+        sg.drawImage(thumbCanvas, 0, 0, 120, 160);
+        btn.querySelector('img').src = small.toDataURL('image/jpeg', 0.82);
+      } catch (e) { console.warn('缩略图', id, e); }
+    });
+    CUR_ST = state;
+    if (pending.length) Promise.all(pending).then(refreshThumbs);
+  }
+
   function buildPanel() {
     bindings = [];
     panel.innerHTML = '';
@@ -1069,6 +1181,9 @@
           colorCtl({ label: '底色', get: () => state.bg, set: v => { state.bg = v; }, tip: '没有照片或照片透明时露出的底色' }),
           h('label', { class: 'check', title: '显示双列预览时可能被裁掉或被遮住的区域' },
             h('input', { type: 'checkbox', checked: ui.showSafe, onchange: e => setSafe(e.target.checked) }), ' 显示安全区提示')),
+        paletteGroup(),
+        textureGroup(),
+        decorTextGroup() || "",
         group(`版式：${LAYOUTS[state.layout].name}`,
           h('p', { class: 'note' }, LAYOUTS[state.layout].desc + '。在左边「版式」里切换。'),
           sliderCtl({ label: '颗粒质感', min: 0, max: 60, get: () => state.grain, set: v => { state.grain = v; }, unit: '%', tip: '给整张图加一点胶片颗粒，去掉数码味。导出 PNG 时最明显' }),
@@ -1093,7 +1208,11 @@
       const b = state.block;
       panel.append(
         group('标题色块',
-          colorCtl({ label: '颜色', get: () => tplColor(state), set: v => { state.templateColors[state.template] = v; rememberColors(state.templateColors); }, tip: `修改「${TEMPLATES[state.template].name}」模板的颜色，会自动记住` }),
+          colorCtl({ label: '颜色', get: () => b.color || blockColor(state), set: v => { b.color = v; }, roles: true, tip: '色块颜色；选圆点里的「跟随色系」，换色系时会一起变' }),
+          h('div', { class: 'btn-row' }, h('button', { class: 'ghost', 'data-tip': '不单独设颜色，跟着模板 / 色系走', onclick: () => { b.color = null; changed(); commit(); } }, '跟随模板 / 色系')),
+          h('label', { class: 'check', title: '色块后面的照片变模糊，像一块磨砂玻璃' },
+            h('input', { type: 'checkbox', checked: !!b.glass, onchange: e => { b.glass = e.target.checked; changed(); commit(); buildPanel(); } }), ' 磨砂玻璃（后面的照片变模糊）'),
+          b.glass && sliderCtl({ label: '模糊', min: 4, max: 80, get: () => b.blur ?? 30, set: v => { b.blur = v; }, unit: 'px' }),
           sliderCtl({ label: '透明度', min: 0, max: 100, get: () => b.opacity, set: v => { b.opacity = v; }, unit: '%', tip: '0 = 完全透明，100 = 完全不透明' }),
           sliderCtl({ label: '圆角', min: 0, max: 300, get: () => b.radius, set: v => { b.radius = v; }, unit: 'px', tip: '只对平直的色块有效' })),
         shapeGroup(),
@@ -1135,6 +1254,7 @@
         h('label', { class: 'check', title: '降低饱和度、稍微偏暖，让不同照片的色调更统一' },
           h('input', { type: 'checkbox', checked: state.photoSoft, onchange: e => { state.photoSoft = e.target.checked; changed(); commit(); } }), ' 柔和滤镜（低饱和、统一色调）'),
         h('p', { class: 'note' }, (state.layout === 'index' ? '色场编号版式里，照片铺满色块上方的区域。' : '照片默认铺满整个画布。') + '选中照片后在画布上拖动调整位置，滚轮或滑块缩放，双击重置。')));
+      panel.append(textureGroup());
     } else if (id === 'sign') {
       const s = state.sign;
       panel.append(group('签名 / 手写涂鸦',
@@ -1155,7 +1275,7 @@
     try {
       const id = await addImageFile(file);
       Object.assign(state.photo, { assetId: id, scale: 1, ox: 0, oy: 0, visible: true });
-      changed(); commit();
+      changed(); commit(); refreshThumbs();
       select('photo'); buildPanel();
       toast('照片已放入，默认铺满。拖动可调整位置');
     } catch (e) { toast('这张图片读不出来，换一张试试'); }
@@ -1483,8 +1603,9 @@
     bindTopbar();
     buildTemplateColors();
     buildLayoutPick();
+    buildPalPick();
     $('#btnSafe').classList.toggle('on', ui.showSafe);
-    Fonts.onChange(() => { requestedFonts.clear(); buildPanel(); scheduleRender(); });
+    Fonts.onChange(() => { requestedFonts.clear(); buildPanel(); scheduleRender(); refreshThumbs(); });
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem(LS_STATE) || 'null'); } catch (e) {}
     state = normalize(saved);

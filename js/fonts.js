@@ -5,6 +5,12 @@ const FONT_DEFS = [
   { family: 'Smiley Sans', name: '得意黑', weights: [400] },
   { family: 'LXGW WenKai', name: '霞鹜文楷', weights: [400] },
   { family: 'ZCOOL KuaiLe', name: '站酷快乐体', weights: [400] },
+  // 书法 / 稚拙手写（全部 SIL OFL 1.1，可商用）
+  { family: 'Zhi Mang Xing', name: '志莽行书', note: '书法·行书', weights: [400] },
+  { family: 'Ma Shan Zheng', name: '马善政楷书', note: '书法·楷书', weights: [400] },
+  { family: 'Xiaolai', name: '小赖手写', note: '稚拙手写', weights: [400] },
+  { family: 'Long Cang', name: '龙藏手写', note: '随手写', weights: [400] },
+  { family: 'ZCOOL XiaoWei', name: '站酷小薇', note: '雅致', weights: [400] },
   { family: 'Alibaba PuHuiTi', name: '阿里巴巴普惠体', weights: [400, 500, 700, 800] },
   // 英文字体（遇到中文会自动用思源黑体补上）
   { family: 'Bodoni Moda', name: 'Bodoni Moda', note: '英文·杂志', weights: [400, 500, 600, 700, 800, 900] },
